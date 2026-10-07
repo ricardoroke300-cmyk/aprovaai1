@@ -282,7 +282,7 @@ def cached_context(subjects):
     requested={(s.get('name'),t) for s in subjects for t in s['topics']}
     found=[]
     directory=auth.data_path(ROOT/'materials-cache')
-    documents=cloud_documents.materials() if cloud_documents.enabled() else []
+    documents=cloud_documents.materials(sorted(requested)) if cloud_documents.enabled() else []
     if not cloud_documents.enabled():
         for path in sorted(directory.glob('*.json')) if directory.exists() else []:
             try:documents.append(json.loads(path.read_text(encoding='utf-8')))

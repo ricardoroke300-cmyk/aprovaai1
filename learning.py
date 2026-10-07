@@ -14,7 +14,7 @@ def persist():
 def ready():return bool(os.getenv('GEMINI_API_KEY') and os.getenv('GEMINI_MODEL'))
 def api(instructions,content,schema,name):
     cancellation.check()
-    stage='Conferindo resposta…' if name.startswith(('verify','review','essay_grade')) else 'Lendo a redação…' if name=='essay_transcription' else 'Criando o tema e os textos de apoio…' if name=='essay_theme' else 'Preparando conteúdo…'
+    stage='Conferindo resposta…' if name.startswith(('verify','review','essay_grade')) or name.endswith('_review') else 'Lendo a redação…' if name=='essay_transcription' else 'Criando o tema e os textos de apoio…' if name=='essay_theme' else 'Preparando conteúdo…'
     cancellation.set_stage(stage)
     if not ready():raise RuntimeError('Configure a chave e o modelo da API no servidor para ativar a IA.')
     if os.getenv('APROVA_DATABASE_URL'):
