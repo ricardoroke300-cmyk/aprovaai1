@@ -37,7 +37,14 @@ except Exception as error:
     st.error('Configure APROVA_DATABASE_URL, GEMINI_API_KEY e GEMINI_MODEL em Settings → Secrets. Confira a conexão PostgreSQL e as permissões do banco.')
     st.stop()
 
-st.markdown('<style>.block-container{padding:0.5rem;max-width:100%}footer{display:none}</style>',unsafe_allow_html=True)
+st.markdown("""<style>
+html,body,[data-testid="stApp"],[data-testid="stAppViewContainer"],[data-testid="stMain"]{background:#ffffff!important;}
+.block-container,[data-testid="stMainBlockContainer"]{padding:0!important;max-width:100%!important;}
+[data-testid="stHeader"]{background:#ffffff!important;}
+[data-testid="stVerticalBlock"]{gap:0!important;}
+iframe{border:0!important;display:block;}
+footer{display:none;}
+</style>""",unsafe_allow_html=True)
 component=components.declare_component('aprova_interface',path=str(Path(__file__).parent/'streamlit_component'))
 from streamlit_bridge import batch
 if 'aprova_bridge' not in st.session_state:st.session_state.aprova_bridge={'responses':[]}
