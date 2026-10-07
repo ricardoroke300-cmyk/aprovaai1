@@ -1,16 +1,19 @@
 <!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;height:100%;background:#fafafa}iframe{width:100%;height:100%;border:0;display:block}</style></head><body><script>
-const pending=new Map();let frame=null,flushTimer=null;
+const pending=new Map(),sent=new Set();let frame=null,flushTimer=null,inFlight=false;
 const uuid=()=>crypto.randomUUID().replaceAll('-','');
 function send(type,data={}){window.parent.postMessage({isStreamlitMessage:true,type,...data},'*');}
-function publish(){clearTimeout(flushTimer);flushTimer=setTimeout(()=>send('streamlit:setComponentValue',{dataType:'json',value:{event:uuid(),requests:[...pending.values()]}}),20);}
-function resize(){send('streamlit:setFrameHeight',{height:Math.max(720,window.innerHeight||850)});}
+function publish(){if(inFlight||!pending.size)return;clearTimeout(flushTimer);flushTimer=setTimeout(()=>{if(inFlight||!pending.size)return;inFlight=true;const rank=r=>r.path==='/api/generation/cancel'?0:r.method!=='GET'?1:2;const requests=[...pending.values()].sort((a,b)=>rank(a)-rank(b)).slice(0,4);for(const request of requests)sent.add(request.id);send('streamlit:setComponentValue',{dataType:'json',value:{event:uuid(),requests}});},40);}
+function resize(){let height=window.innerHeight||850;try{height=window.parent.innerHeight||height;}catch{}send('streamlit:setFrameHeight',{height:Math.max(520,height)});}
 window.addEventListener('message',event=>{
  if(event.source===window.parent&&event.data?.type==='streamlit:render'){
   if(!frame){frame=document.createElement('iframe');frame.src='app.html';frame.title='aprova.ai';frame.setAttribute('allow','clipboard-write');document.body.append(frame);resize();}
-  for(const reply of event.data.args.responses||[]){if(pending.has(reply.id)){pending.delete(reply.id);frame.contentWindow.postMessage({type:'aprova:reply',reply},location.origin);publish();}}
+  for(const reply of event.data.args.responses||[]){sent.delete(reply.id);if(pending.has(reply.id)){pending.delete(reply.id);frame.contentWindow.postMessage({type:'aprova:reply',reply},location.origin);}}
+  if(inFlight&&!sent.size){inFlight=false;publish();}
+ }else if(frame&&event.source===frame.contentWindow&&event.origin===location.origin&&event.data?.type==='aprova:discard'){
+  pending.delete(event.data.id);
  }else if(frame&&event.source===frame.contentWindow&&event.origin===location.origin&&event.data?.type==='aprova:request'){
   const request=event.data.request;
-  if(pending.size>=20){frame.contentWindow.postMessage({type:'aprova:reply',reply:{id:request.id,status:429,mime:'application/json',body:btoa(JSON.stringify({error:'Aguarde as solicitações em andamento.'}))}},location.origin);return;}
+  if(pending.size>=100){frame.contentWindow.postMessage({type:'aprova:reply',reply:{id:request.id,status:429,mime:'application/json',body:btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify({error:'Há muitas solicitações pendentes. Aguarde ou recarregue o aplicativo.'}))))}},location.origin);return;}
   pending.set(request.id,request);publish();
  }
 });

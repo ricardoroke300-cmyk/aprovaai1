@@ -54,7 +54,7 @@ body.auth-screen aside{display:none}body.auth-screen main{margin:0 auto;width:10
 <script>
 // Private API messages travel through the Streamlit component, never an extra HTTP port.
 (()=>{
- const originalFetch=window.fetch.bind(window),waiting=new Map();
+ const originalFetch=window.fetch.bind(window),waiting=new Map(),shared=new Map();
  window.addEventListener('message',event=>{
   if(event.source!==window.parent||event.origin!==location.origin||event.data?.type!=='aprova:reply')return;
   const reply=event.data.reply,item=waiting.get(reply.id);if(!item)return;
@@ -64,16 +64,21 @@ body.auth-screen aside{display:none}body.auth-screen main{margin:0 auto;width:10
  });
  window.fetch=(path,options={})=>{
   if(typeof path!=='string'||!path.startsWith('/api/'))return originalFetch(path,options);
-  return new Promise((resolve,reject)=>{
+  const headersForKey=new Headers(options.headers||{}),key=(options.method||'GET')==='GET'?path+'|'+(headersForKey.get('X-Account-Id')||''):'';
+  if(key&&shared.has(key))return shared.get(key).then(response=>response.clone());
+  const result=new Promise((resolve,reject)=>{
    const id=crypto.randomUUID().replaceAll('-',''),signal=options.signal;
-   const abort=()=>{const item=waiting.get(id);if(item){clearTimeout(item.timer);item.cleanup();waiting.delete(id);}reject(new DOMException('Geração cancelada.','AbortError'));};
+   const abort=()=>{const item=waiting.get(id);if(item){clearTimeout(item.timer);item.cleanup();waiting.delete(id);window.parent.postMessage({type:'aprova:discard',id},location.origin);}reject(new DOMException('Geração cancelada.','AbortError'));};
    if(signal?.aborted){abort();return;}
-   const timer=setTimeout(()=>{waiting.delete(id);signal?.removeEventListener('abort',abort);reject(Error('O serviço demorou a responder. Confira sua conexão e tente novamente.'));},90000);
+   const timer=setTimeout(()=>{waiting.delete(id);signal?.removeEventListener('abort',abort);window.parent.postMessage({type:'aprova:discard',id},location.origin);reject(Error('O serviço demorou a responder. Confira sua conexão e tente novamente.'));},180000);
    waiting.set(id,{resolve,reject,timer,cleanup:()=>signal?.removeEventListener('abort',abort)});signal?.addEventListener('abort',abort,{once:true});
    const headers=Object.fromEntries(new Headers(options.headers||{}));
    const normalized={'X-Account-Id':headers['x-account-id']||'','X-Generation-Id':headers['x-generation-id']||''};
    window.parent.postMessage({type:'aprova:request',request:{id,path,method:options.method||'GET',headers:normalized,body:options.body||''}},location.origin);
   });
+  if(!key)return result;
+  const tracked=result.then(response=>{shared.delete(key);return response;},error=>{shared.delete(key);throw error;});shared.set(key,tracked);
+  return tracked.then(response=>response.clone());
  };
 })();
 
@@ -89,12 +94,13 @@ let cloudVersion=0,cloudProgressReady=false,cloudPending=null,cloudSaveTimer=nul
 function cloudHeaders(){return {'Content-Type':'application/json','X-Guide-Token':SERVICE_TOKEN,'X-Account-Id':authUser?.id||''};}
 function queueCloudProgress(snapshot){if(!CLOUD_MODE||!cloudProgressReady)return;cloudPending=JSON.stringify(snapshot);if(cloudConflict||cloudSaveTimer||cloudSavePromise)return;cloudSaveTimer=setTimeout(()=>{cloudSaveTimer=null;flushCloudProgress();},1500);}
 async function flushCloudProgress(){if(!CLOUD_MODE)return true;if(cloudConflict)return false;if(cloudSaveTimer){clearTimeout(cloudSaveTimer);cloudSaveTimer=null;}if(cloudSavePromise)return cloudSavePromise;if(!cloudPending)return true;cloudSavePromise=(async()=>{try{while(cloudPending){const encoded=cloudPending;cloudPending=null;const response=await fetch('/api/progress',{method:'PUT',credentials:'same-origin',headers:cloudHeaders(),body:JSON.stringify({version:cloudVersion,data:JSON.parse(encoded)})});const data=await response.json();if(!response.ok){cloudPending=cloudPending||encoded;if(response.status===409)cloudConflict=true;throw Error(data.error||'Não foi possível sincronizar seu progresso.');}cloudVersion=data.version;}return true;}catch(error){notify(error.message+' Sua cópia local foi preservada.',true);return false;}finally{cloudSavePromise=null;}})();return cloudSavePromise;}
-function waitForJob(signal){return new Promise((resolve,reject)=>{if(signal?.aborted){reject(Error('Geração cancelada.'));return;}let timer;const abort=()=>{clearTimeout(timer);reject(Error('Geração cancelada.'));};signal?.addEventListener('abort',abort,{once:true});timer=setTimeout(()=>{signal?.removeEventListener('abort',abort);resolve();},1200);});}
+function waitForJob(signal){return new Promise((resolve,reject)=>{if(signal?.aborted){reject(Error('Geração cancelada.'));return;}let timer;const abort=()=>{clearTimeout(timer);reject(Error('Geração cancelada.'));};signal?.addEventListener('abort',abort,{once:true});timer=setTimeout(()=>{signal?.removeEventListener('abort',abort);resolve();},3000);});}
 async function resolveGenerationResponse(response,signal){if(!CLOUD_MODE||response.status!==202)return response;const accepted=await response.json();if(!/^[a-f0-9]{32}$/.test(accepted.job_id||''))throw Error('A fila retornou uma geração inválida.');while(true){if(signal?.aborted)throw Error('Geração cancelada.');const statusResponse=await fetch('/api/jobs/'+accepted.job_id,{headers:cloudHeaders(),credentials:'same-origin',signal});const task=await statusResponse.json();if(!statusResponse.ok)throw Error(task.error||'Não foi possível acompanhar a geração.');if(task.status==='done')return fetch('/api/jobs/'+accepted.job_id+'/result',{headers:cloudHeaders(),credentials:'same-origin',signal});if(task.status==='failed')throw Error(task.error||'Não foi possível concluir a geração.');if(task.status==='cancelled')throw Error('Geração cancelada.');await waitForJob(signal);}}
 
 const GENERATION_LABELS={'/api/tutor/answer':'Preparando uma explicação, um exemplo e um bizu para sua dúvida.','file-reading':'Lendo as páginas e extraindo o conteúdo do documento.','/api/practice/next':'Criando uma questão inédita e conferindo o gabarito.','/api/exams/generate':'Montando seu simulado a partir do edital e conferindo as respostas.','/api/material/pdf':'Preparando e conferindo sua apostila.','/api/target/analyze':'Analisando o edital e organizando as matérias e assuntos.','/api/guide':'Criando o guia personalizado do seu edital.','/api/board/analyze':'Analisando as referências e o perfil da banca.','/api/essay/theme':'Preparando um tema para sua redação.','/api/essay/transcribe':'Lendo e transcrevendo as fotos da sua redação.','/api/essay/grade':'Analisando sua redação e preparando a correção.','local-pdf':'Preparando as páginas e finalizando seu PDF.'};
 let generationCount=0,generationTimer=null,generationStarted=0,generationController=null,generationId=null;
-async function updateGenerationStage(){const id=generationId;if(!id||!serviceAvailable()||generationController?.signal.aborted)return;try{const response=await fetch('/api/generation/status?id='+encodeURIComponent(id),{headers:{'X-Guide-Token':SERVICE_TOKEN,'X-Account-Id':authUser?.id||''}});if(!response.ok)return;const data=await response.json();if(generationCount&&generationId===id&&data.stage)document.getElementById('generation-description').textContent=data.stage;}catch{}}
+let generationStagePending=false,generationStageCheckedAt=0;
+async function updateGenerationStage(){if(generationStagePending||Date.now()-generationStageCheckedAt<4000)return;const id=generationId;if(!id||!serviceAvailable()||generationController?.signal.aborted)return;generationStagePending=true;generationStageCheckedAt=Date.now();try{const response=await fetch('/api/generation/status?id='+encodeURIComponent(id),{headers:{'X-Guide-Token':SERVICE_TOKEN,'X-Account-Id':authUser?.id||''}});if(!response.ok)return;const data=await response.json();if(generationCount&&generationId===id&&data.stage)document.getElementById('generation-description').textContent=data.stage;}catch{}finally{generationStagePending=false;}}
 function beginGeneration(path){if(!GENERATION_LABELS[path])return false;const overlay=document.getElementById('generation-overlay');if(generationCount++===0){generationController=new AbortController();generationId=globalThis.crypto?.randomUUID?.()||Date.now()+'-'+Math.random();document.getElementById('cancel-generation').onclick=cancelGeneration;overlay.hidden=false;generationStarted=Date.now();document.getElementById('generation-elapsed').textContent='00:00';document.querySelector('main').setAttribute('inert','');document.querySelector('aside').setAttribute('inert','');document.body.style.overflow='hidden';generationTimer=setInterval(()=>{const seconds=Math.floor((Date.now()-generationStarted)/1000);document.getElementById('generation-elapsed').textContent=String(Math.floor(seconds/60)).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0');if(path.startsWith('/api/'))updateGenerationStage();},1000);}document.getElementById('generation-description').textContent=GENERATION_LABELS[path];return true;}
 function endGeneration(){generationCount=Math.max(0,generationCount-1);if(generationCount)return;clearInterval(generationTimer);generationTimer=null;document.getElementById('generation-overlay').hidden=true;document.querySelector('main').removeAttribute('inert');document.querySelector('aside').removeAttribute('inert');document.body.style.overflow='';generationController=null;generationId=null;}
 function cancelGeneration(){if(!generationController||generationController.signal.aborted)return;if(serviceAvailable())fetch('/api/generation/cancel',{method:'POST',headers:{'X-Guide-Token':SERVICE_TOKEN,'X-Account-Id':authUser?.id||'','X-Generation-Id':generationId,'Content-Type':'application/json'},body:'{}'}).catch(()=>{});generationController.abort();}
