@@ -1,0 +1,220 @@
+{
+  "type": "object",
+  "properties": {
+    "concurso": {
+      "type": "object",
+      "properties": {
+        "titulo": {
+          "type": "string"
+        },
+        "subtitulo": {
+          "type": "string"
+        },
+        "edicao_ano": {
+          "type": "string"
+        },
+        "banca_organizadora": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "titulo",
+        "subtitulo",
+        "edicao_ano",
+        "banca_organizadora"
+      ],
+      "additionalProperties": false
+    },
+    "metricas_chave": {
+      "type": "object",
+      "properties": {
+        "data_prova": {
+          "type": "string"
+        },
+        "turno_prova": {
+          "type": "string"
+        },
+        "remuneracao_maxima": {
+          "type": "string"
+        },
+        "total_vagas": {
+          "type": "string"
+        },
+        "carga_horaria": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "data_prova",
+        "turno_prova",
+        "remuneracao_maxima",
+        "total_vagas",
+        "carga_horaria"
+      ],
+      "additionalProperties": false
+    },
+    "cronograma": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "etapa": {
+            "type": "integer"
+          },
+          "titulo": {
+            "type": "string"
+          },
+          "periodo": {
+            "type": "string"
+          },
+          "destaque": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "etapa",
+          "titulo",
+          "periodo",
+          "destaque"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "cargos": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "nome": {
+            "type": "string"
+          },
+          "requisito": {
+            "type": "string"
+          },
+          "salario": {
+            "type": "string"
+          },
+          "carga_horaria": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "nome",
+          "requisito",
+          "salario",
+          "carga_horaria"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "locais_e_horarios": {
+      "type": "object",
+      "properties": {
+        "cidades_prova": {
+          "type": "string"
+        },
+        "horarios_portoes": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "cidades_prova",
+        "horarios_portoes"
+      ],
+      "additionalProperties": false
+    },
+    "materias_e_pesos": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "disciplina": {
+            "type": "string"
+          },
+          "questoes": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "peso": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "topicos": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "disciplina",
+          "questoes",
+          "peso",
+          "topicos"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "distribuicao_pontos": {
+      "type": "object",
+      "properties": {
+        "total_questoes": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "pontos_especificas": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "pontos_portugues": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "pontos_gerais": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "total_questoes",
+        "pontos_especificas",
+        "pontos_portugues",
+        "pontos_gerais"
+      ],
+      "additionalProperties": false
+    },
+    "requisitos_e_documentos": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "dica_dia_prova": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "concurso",
+    "metricas_chave",
+    "cronograma",
+    "cargos",
+    "locais_e_horarios",
+    "materias_e_pesos",
+    "distribuicao_pontos",
+    "requisitos_e_documentos",
+    "dica_dia_prova"
+  ],
+  "additionalProperties": false
+}

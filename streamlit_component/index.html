@@ -1,0 +1,19 @@
+<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;height:100%;background:#fafafa}iframe{width:100%;height:100%;border:0;display:block}</style></head><body><script>
+const pending=new Map();let frame=null,flushTimer=null;
+const uuid=()=>crypto.randomUUID().replaceAll('-','');
+function send(type,data={}){window.parent.postMessage({isStreamlitMessage:true,type,...data},'*');}
+function publish(){clearTimeout(flushTimer);flushTimer=setTimeout(()=>send('streamlit:setComponentValue',{dataType:'json',value:{event:uuid(),requests:[...pending.values()]}}),20);}
+function resize(){send('streamlit:setFrameHeight',{height:Math.max(720,window.innerHeight||850)});}
+window.addEventListener('message',event=>{
+ if(event.source===window.parent&&event.data?.type==='streamlit:render'){
+  if(!frame){frame=document.createElement('iframe');frame.src='app.html';frame.title='aprova.ai';frame.setAttribute('allow','clipboard-write');document.body.append(frame);resize();}
+  for(const reply of event.data.args.responses||[]){if(pending.has(reply.id)){pending.delete(reply.id);frame.contentWindow.postMessage({type:'aprova:reply',reply},location.origin);publish();}}
+ }else if(frame&&event.source===frame.contentWindow&&event.origin===location.origin&&event.data?.type==='aprova:request'){
+  const request=event.data.request;
+  if(pending.size>=20){frame.contentWindow.postMessage({type:'aprova:reply',reply:{id:request.id,status:429,mime:'application/json',body:btoa(JSON.stringify({error:'Aguarde as solicitações em andamento.'}))}},location.origin);return;}
+  pending.set(request.id,request);publish();
+ }
+});
+window.addEventListener('resize',resize);
+send('streamlit:componentReady',{apiVersion:1});resize();
+</script></body></html>
